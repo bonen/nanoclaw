@@ -9,5 +9,8 @@
 
 // telegram
 
+// loopbox
+import './loopbox.js';
+
 // whatsapp
 import './whatsapp.js';
