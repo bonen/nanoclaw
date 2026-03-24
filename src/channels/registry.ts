@@ -10,6 +10,10 @@ export interface ChannelOpts {
   onChatMetadata: OnChatMetadata;
   registeredGroups: () => Record<string, RegisteredGroup>;
   registerGroup: (jid: string, group: RegisteredGroup) => void;
+  registerAction: (
+    type: string,
+    handler: (sourceGroup: string, isMain: boolean, payload: Record<string, unknown>) => Promise<void>,
+  ) => void;
 }
 
 export type ChannelFactory = (opts: ChannelOpts) => Channel | null;

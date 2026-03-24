@@ -11,7 +11,11 @@ const DEFAULT_CONVEX_URL = 'https://convex.loopbox.one';
 interface LoopboxTask {
   _id: string;
   name: string;
-  chat: Array<{ sender: string; message: string }>;
+  context: string;
+  details?: string | null;
+  labels?: Array<{ id: string; name: string; color: string }>;
+  assignmentMessage?: string | null;
+  formAction?: Record<string, unknown> | null;
 }
 
 export class LoopboxChannel implements Channel {
@@ -46,19 +50,81 @@ export class LoopboxChannel implements Channel {
           this.opts.onChatMetadata(jid, timestamp, task.name, 'loopbox', false);
           this.ensureGroupRegistered(jid, task.name, task._id);
 
-          // Build full chat history as context so the agent has prior turns
-          const history = task.chat.map((m) => `User: ${m.message}`).join('\n');
-
           this.opts.onMessage(jid, {
             id: task._id,
             chat_jid: jid,
             sender: 'user',
             sender_name: 'User',
-            content: history,
+            content: task.context,
             timestamp,
             is_from_me: false,
             is_bot_message: false,
           });
+        }
+      },
+    );
+
+    // Register IPC action handlers for container agents
+    this.opts.registerAction(
+      'loopbox_update_task',
+      async (sourceGroup, _isMain, payload) => {
+        const { loopboxTaskId, message, details, labelIds, reassignToUserId } =
+          payload as {
+            loopboxTaskId?: string;
+            message?: string;
+            details?: string;
+            labelIds?: string[];
+            reassignToUserId?: string;
+          };
+        if (!loopboxTaskId) return;
+
+        // Auth: only the loopbox group that owns this task
+        if (sourceGroup !== `loopbox_${loopboxTaskId.slice(0, 16)}`) {
+          logger.warn(
+            { sourceGroup, loopboxTaskId },
+            'Unauthorized loopbox_update_task blocked',
+          );
+          return;
+        }
+
+        try {
+          const updates: Record<string, unknown> = {
+            token: this.token,
+            taskId: loopboxTaskId,
+          };
+          if (message !== undefined) updates.message = message;
+          if (details !== undefined) updates.details = details;
+          if (labelIds !== undefined) updates.labelIds = labelIds;
+          if (reassignToUserId !== undefined)
+            updates.reassignToUserId = reassignToUserId;
+
+          await this.client.mutation(anyApi.agents.updateTask, updates);
+          this.inProgress.delete(loopboxTaskId);
+          logger.info({ loopboxTaskId }, 'Loopbox task updated via IPC');
+        } catch (err) {
+          logger.error({ err, loopboxTaskId }, 'Failed to update Loopbox task');
+        }
+      },
+    );
+
+    this.opts.registerAction(
+      'loopbox_create_task',
+      async (_sourceGroup, _isMain, payload) => {
+        const { name, description } = payload as {
+          name?: string;
+          description?: string;
+        };
+        if (!name) return;
+
+        try {
+          await this.client.mutation(anyApi.channels.addTaskViaToken, {
+            token: this.token,
+            name,
+            ...(description ? { description } : {}),
+          });
+          logger.info({ name }, 'Loopbox task created via IPC');
+        } catch (err) {
+          logger.error({ err, name }, 'Failed to create Loopbox task');
         }
       },
     );

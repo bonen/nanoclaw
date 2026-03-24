@@ -333,6 +333,59 @@ Use available_groups.json to find the JID for a group. The folder name must be c
   },
 );
 
+// Loopbox-specific tools — only available when running inside a Loopbox task
+if (chatJid?.startsWith('loopbox:')) {
+  const loopboxTaskId = chatJid.replace('loopbox:', '');
+
+  server.tool(
+    'loopbox_update_task',
+    'Update the current Loopbox task. Post a message to the activity feed and/or update the task details/notes.',
+    {
+      message: z.string().optional().describe('Message to post in the task activity feed (visible to user)'),
+      details: z.string().optional().describe('Replace the task details/notes with this content (supports markdown)'),
+      reassign_to_user_id: z.string().optional().describe('Reassign the task back to this user ID'),
+      label_ids: z.array(z.string()).optional().describe('Replace all task labels with these label IDs'),
+    },
+    async (args) => {
+      const data: Record<string, unknown> = {
+        type: 'loopbox_update_task',
+        loopboxTaskId,
+        groupFolder,
+        timestamp: new Date().toISOString(),
+      };
+      if (args.message !== undefined) data.message = args.message;
+      if (args.details !== undefined) data.details = args.details;
+      if (args.reassign_to_user_id) data.reassignToUserId = args.reassign_to_user_id;
+      if (args.label_ids) data.labelIds = args.label_ids;
+
+      writeIpcFile(TASKS_DIR, data);
+      return { content: [{ type: 'text' as const, text: 'Task update requested.' }] };
+    },
+  );
+}
+
+// Available to any agent — creates a new Loopbox task assigned to the owner
+server.tool(
+  'loopbox_create_task',
+  'Create a new Loopbox task assigned to the owner. Use for proactive follow-ups or to delegate work.',
+  {
+    name: z.string().describe('Task title'),
+    description: z.string().optional().describe('Optional task description / details'),
+  },
+  async (args) => {
+    const data = {
+      type: 'loopbox_create_task',
+      name: args.name,
+      description: args.description,
+      groupFolder,
+      timestamp: new Date().toISOString(),
+    };
+
+    writeIpcFile(TASKS_DIR, data);
+    return { content: [{ type: 'text' as const, text: `Loopbox task "${args.name}" creation requested.` }] };
+  },
+);
+
 // Start the stdio transport
 const transport = new StdioServerTransport();
 await server.connect(transport);

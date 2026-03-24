@@ -131,9 +131,18 @@ If you see "Channel installed but credentials missing — skipping", the `LOOPBO
 - `LOOPBOX_TOKEN` is read from `.env` at startup via `readEnvFile`. If missing, the channel is gracefully skipped (same pattern as Telegram/Slack/Discord).
 - NanoClaw subscribes to `agents:getAssignedTasks` on Convex — a reactive push subscription, no polling.
 - Each pending task becomes a JID (`loopbox:<taskId>`) and is auto-registered as its own group with an isolated `groups/loopbox_<id>/` folder and agent session.
-- The full chat history is included in every message so the agent has prior context.
-- When the agent replies, NanoClaw calls `agents:submitWork` on Convex, which posts the reply and removes the task from the pending queue.
+- The task's `context` field (a server-assembled, formatted prompt including full history and instructions) is passed directly to the agent — no client-side history assembly needed.
+- When the agent replies via the normal output path, NanoClaw calls `agents:submitWork` on Convex, which posts the reply and removes the task from the pending queue.
 - The `inProgress` set prevents double-processing if the subscription fires while a response is in flight.
+
+### Container agent tools
+
+Agents running in a Loopbox task context have two additional MCP tools (registered via the `registerAction` mechanism in `ChannelOpts`):
+
+- **`loopbox_update_task`** (loopbox groups only): Update task details or post a message to the activity feed without sending a final reply. Supports `message`, `details`, `label_ids`, and `reassign_to_user_id`. Authorization: only the group that owns the task can call this.
+- **`loopbox_create_task`** (any group): Create a new Loopbox task assigned to the owner. Useful for proactive follow-up tasks from any agent.
+
+Both tools write IPC files to `/workspace/ipc/tasks/` which the host processes and routes to the Loopbox channel — the token never leaves the host.
 
 ## Troubleshooting
 

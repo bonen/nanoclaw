@@ -535,6 +535,16 @@ async function main(): Promise<void> {
     }
   }
 
+  // Action registry: channels register handlers for IPC-routed actions
+  const actionRegistry = new Map<
+    string,
+    (
+      sourceGroup: string,
+      isMain: boolean,
+      payload: Record<string, unknown>,
+    ) => Promise<void>
+  >();
+
   // Channel callbacks (shared by all channels)
   const channelOpts = {
     onMessage: (chatJid: string, msg: NewMessage) => {
@@ -574,6 +584,16 @@ async function main(): Promise<void> {
     ) => storeChatMetadata(chatJid, timestamp, name, channel, isGroup),
     registeredGroups: () => registeredGroups,
     registerGroup,
+    registerAction: (
+      type: string,
+      handler: (
+        sourceGroup: string,
+        isMain: boolean,
+        payload: Record<string, unknown>,
+      ) => Promise<void>,
+    ) => {
+      actionRegistry.set(type, handler);
+    },
   };
 
   // Create and connect all registered channels.
@@ -632,6 +652,11 @@ async function main(): Promise<void> {
     getAvailableGroups,
     writeGroupsSnapshot: (gf, im, ag, rj) =>
       writeGroupsSnapshot(gf, im, ag, rj),
+    channelAction: async (type, sourceGroup, isMain, payload) => {
+      const handler = actionRegistry.get(type);
+      if (handler) await handler(sourceGroup, isMain, payload);
+      else logger.warn({ type }, 'Unknown channel action type');
+    },
     onTasksChanged: () => {
       const tasks = getAllTasks();
       const taskRows = tasks.map((t) => ({

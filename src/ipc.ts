@@ -23,6 +23,12 @@ export interface IpcDeps {
     registeredJids: Set<string>,
   ) => void;
   onTasksChanged: () => void;
+  channelAction?: (
+    type: string,
+    sourceGroup: string,
+    isMain: boolean,
+    payload: Record<string, unknown>,
+  ) => Promise<void>;
 }
 
 let ipcWatcherRunning = false;
@@ -172,6 +178,8 @@ export async function processTaskIpc(
     trigger?: string;
     requiresTrigger?: boolean;
     containerConfig?: RegisteredGroup['containerConfig'];
+    // For loopbox channel actions
+    loopboxTaskId?: string;
   },
   sourceGroup: string, // Verified identity from IPC directory
   isMain: boolean, // Verified from directory path
@@ -452,6 +460,20 @@ export async function processTaskIpc(
           { data },
           'Invalid register_group request - missing required fields',
         );
+      }
+      break;
+
+    case 'loopbox_update_task':
+    case 'loopbox_create_task':
+      if (deps.channelAction) {
+        await deps.channelAction(
+          data.type,
+          sourceGroup,
+          isMain,
+          data as Record<string, unknown>,
+        );
+      } else {
+        logger.warn({ type: data.type }, 'No channel action handler registered');
       }
       break;
 
