@@ -80,7 +80,17 @@ npm install convex
 
 Copy `${CLAUDE_SKILL_DIR}/loopbox.ts` to `src/channels/loopbox.ts`.
 
-### 4c. Register in the barrel
+### 4c. Install the container skill
+
+The container skill teaches agents inside containers how to use the Loopbox MCP tools.
+
+```bash
+mkdir -p container/skills/loopbox
+```
+
+Copy `${CLAUDE_SKILL_DIR}/container-skill.md` to `container/skills/loopbox/SKILL.md`.
+
+### 4d. Register in the barrel
 
 Add this import to `src/channels/index.ts`:
 
@@ -90,11 +100,23 @@ import './loopbox.js';
 
 ## Phase 5: Build and restart
 
+### 5a. Rebuild the host
+
 ```bash
 npm run build
 ```
 
-Build must be clean (no TypeScript errors) before restarting.
+Build must be clean (no TypeScript errors) before continuing.
+
+### 5b. Rebuild the container image
+
+The Loopbox MCP tools (`loopbox_update_task`, `loopbox_create_task`) are compiled into the container image via `container/agent-runner/src/ipc-mcp-stdio.ts`. Rebuild the image so agents have access to them:
+
+```bash
+./container/build.sh
+```
+
+### 5c. Restart the service
 
 Restart the service:
 
