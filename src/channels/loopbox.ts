@@ -1,18 +1,16 @@
 import { anyApi } from 'convex/server';
 import { ConvexClient } from 'convex/browser';
 
+import { readEnvFile } from '../env.js';
 import { logger } from '../logger.js';
 import { Channel } from '../types.js';
 import { ChannelOpts, registerChannel } from './registry.js';
 
-const CONVEX_URL = 'https://bright-dove-738.eu-west-1.convex.cloud';
-const TOKEN = 'nanoclaw-secret-2024';
-const AGENT_ID = 'kh7bmtgyv59bddgydbrwhkzdbd83f8nq';
+const DEFAULT_CONVEX_URL = 'https://convex.loopbox.one';
 
 interface LoopboxTask {
-  taskId: string;
-  taskName: string;
-  lastMessage: string;
+  _id: string;
+  name: string;
   chat: Array<{ sender: string; message: string }>;
 }
 
@@ -23,42 +21,41 @@ export class LoopboxChannel implements Channel {
   private connected = false;
   private opts: ChannelOpts;
 
-  constructor(opts: ChannelOpts) {
+  constructor(
+    opts: ChannelOpts,
+    private token: string,
+    convexUrl: string,
+  ) {
     this.opts = opts;
-    this.client = new ConvexClient(CONVEX_URL);
+    this.client = new ConvexClient(convexUrl);
   }
 
   async connect(): Promise<void> {
     this.connected = true;
 
     this.client.onUpdate(
-      anyApi.nanoclaw.getPendingMessages,
-      { token: TOKEN },
+      anyApi.agents.getAssignedTasks,
+      { token: this.token },
       async (tasks: LoopboxTask[]) => {
         for (const task of tasks) {
-          if (this.inProgress.has(task.taskId)) continue;
-          this.inProgress.add(task.taskId);
+          if (this.inProgress.has(task._id)) continue;
+          this.inProgress.add(task._id);
 
-          const jid = `loopbox:${task.taskId}`;
+          const jid = `loopbox:${task._id}`;
           const timestamp = new Date().toISOString();
-          this.opts.onChatMetadata(jid, timestamp, task.taskName, 'loopbox', false);
-          this.ensureGroupRegistered(jid, task.taskName, task.taskId);
+          this.opts.onChatMetadata(jid, timestamp, task.name, 'loopbox', false);
+          this.ensureGroupRegistered(jid, task.name, task._id);
 
           // Build full chat history as context so the agent has prior turns
-          const history = task.chat
-            .map((m) => {
-              const role = m.sender === AGENT_ID ? 'Assistant' : 'User';
-              return `${role}: ${m.message}`;
-            })
-            .join('\n');
+          const history = task.chat.map((m) => `User: ${m.message}`).join('\n');
 
           this.opts.onMessage(jid, {
-            id: task.taskId,
+            id: task._id,
             chat_jid: jid,
             sender: 'user',
             sender_name: 'User',
             content: history,
-            timestamp: new Date().toISOString(),
+            timestamp,
             is_from_me: false,
             is_bot_message: false,
           });
@@ -94,8 +91,8 @@ export class LoopboxChannel implements Channel {
   async sendMessage(jid: string, text: string): Promise<void> {
     const taskId = jid.replace('loopbox:', '');
     try {
-      await this.client.mutation(anyApi.nanoclaw.respondToTask, {
-        token: TOKEN,
+      await this.client.mutation(anyApi.agents.submitWork, {
+        token: this.token,
         taskId,
         message: text,
       });
@@ -121,4 +118,15 @@ export class LoopboxChannel implements Channel {
   }
 }
 
-registerChannel('loopbox', (opts: ChannelOpts) => new LoopboxChannel(opts));
+registerChannel('loopbox', (opts: ChannelOpts) => {
+  const { LOOPBOX_TOKEN, LOOPBOX_URL } = readEnvFile([
+    'LOOPBOX_TOKEN',
+    'LOOPBOX_URL',
+  ]);
+  if (!LOOPBOX_TOKEN) return null;
+  return new LoopboxChannel(
+    opts,
+    LOOPBOX_TOKEN,
+    LOOPBOX_URL || DEFAULT_CONVEX_URL,
+  );
+});
