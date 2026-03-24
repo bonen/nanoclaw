@@ -190,7 +190,11 @@ function buildVolumeMounts(
     group.folder,
     'agent-runner-src',
   );
-  if (!fs.existsSync(groupAgentRunnerDir) && fs.existsSync(agentRunnerSrc)) {
+  // LOCAL FIX: always sync (not just on first run) so new MCP tools in
+  // ipc-mcp-stdio.ts are picked up by existing groups without manual intervention.
+  // Upstream uses `if (!exists)` which freezes the copy at group creation time.
+  // Keep this unconditional cpSync when merging from upstream.
+  if (fs.existsSync(agentRunnerSrc)) {
     fs.cpSync(agentRunnerSrc, groupAgentRunnerDir, { recursive: true });
   }
   mounts.push({
