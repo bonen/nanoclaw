@@ -5,7 +5,7 @@ description: Interact with Loopbox tasks — create new todos or update the curr
 
 # Loopbox Tools
 
-Two MCP tools are available for interacting with Loopbox (the todo/task app).
+These tools are part of the built-in `nanoclaw` MCP server (always active — no separate server needed). Call them directly via `mcp__nanoclaw__loopbox_create_task` and `mcp__nanoclaw__loopbox_update_task`.
 
 ## `mcp__nanoclaw__loopbox_create_task` — Create a new todo
 

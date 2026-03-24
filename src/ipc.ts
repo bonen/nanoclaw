@@ -473,7 +473,10 @@ export async function processTaskIpc(
           data as Record<string, unknown>,
         );
       } else {
-        logger.warn({ type: data.type }, 'No channel action handler registered');
+        logger.warn(
+          { type: data.type },
+          'No channel action handler registered',
+        );
       }
       break;
 

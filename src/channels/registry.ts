@@ -12,7 +12,11 @@ export interface ChannelOpts {
   registerGroup: (jid: string, group: RegisteredGroup) => void;
   registerAction: (
     type: string,
-    handler: (sourceGroup: string, isMain: boolean, payload: Record<string, unknown>) => Promise<void>,
+    handler: (
+      sourceGroup: string,
+      isMain: boolean,
+      payload: Record<string, unknown>,
+    ) => Promise<void>,
   ) => void;
 }
 
